@@ -28,8 +28,7 @@ import (
 )
 
 type CallTracesStageParams struct {
-	ToBlock   uint64 // not setting this params means no limit
-	BatchSize datasize.ByteSize
+	ToBlock uint64 // not setting this params means no limit
 }
 
 func SpawnCallTraces(s *StageState, db ethdb.Database, chainConfig *params.ChainConfig, engine consensus.Engine, tmpdir string, quit <-chan struct{}, params CallTracesStageParams) error {

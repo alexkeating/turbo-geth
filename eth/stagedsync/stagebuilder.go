@@ -316,15 +316,11 @@ func DefaultStages() StageBuilders {
 					Description: "Generate call traces index",
 					ExecFunc: func(s *StageState, u Unwinder) error {
 						return SpawnCallTraces(s, world.TX, world.ChainConfig, world.Engine, world.TmpDir, world.QuitCh,
-							CallTracesStageParams{
-								BatchSize: world.BatchSize,
-							})
+							CallTracesStageParams{})
 					},
 					UnwindFunc: func(u *UnwindState, s *StageState) error {
 						return UnwindCallTraces(u, s, world.TX, world.ChainConfig, world.Engine, world.QuitCh,
-							CallTracesStageParams{
-								BatchSize: world.BatchSize,
-							})
+							CallTracesStageParams{})
 					},
 				}
 			},

@@ -551,15 +551,13 @@ func stageCallTraces(db ethdb.Database, ctx context.Context) error {
 		u := &stagedsync.UnwindState{Stage: stages.CallTraces, UnwindPoint: s.BlockNumber - unwind}
 		return stagedsync.UnwindCallTraces(u, s, db, chainConfig, engine, ch,
 			stagedsync.CallTracesStageParams{
-				ToBlock:   block,
-				BatchSize: batchSize,
+				ToBlock: block,
 			})
 	}
 
 	if err := stagedsync.SpawnCallTraces(s, db, chainConfig, engine, tmpdir, ch,
 		stagedsync.CallTracesStageParams{
-			ToBlock:   block,
-			BatchSize: batchSize,
+			ToBlock: block,
 		}); err != nil {
 		return err
 	}
