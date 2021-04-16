@@ -96,20 +96,12 @@ func promoteCallTraces(logPrefix string, tx ethdb.Database, startBlock, endBlock
 		select {
 		default:
 		case <-logEvery.C:
-			sz, err := tx.(ethdb.HasTx).Tx().(ethdb.HasStats).BucketSize(dbutils.CallFromIndex)
-			if err != nil {
-				return err
-			}
-			sz2, err := tx.(ethdb.HasTx).Tx().(ethdb.HasStats).BucketSize(dbutils.CallToIndex)
-			if err != nil {
-				return err
-			}
 			var m runtime.MemStats
 			runtime.ReadMemStats(&m)
 			speed := float64(blockNum-prev) / float64(logInterval/time.Second)
 			prev = blockNum
 
-			log.Info(fmt.Sprintf("[%s] Progress", logPrefix), "number", blockNum, dbutils.CallFromIndex, common.StorageSize(sz), dbutils.CallToIndex, common.StorageSize(sz2),
+			log.Info(fmt.Sprintf("[%s] Progress", logPrefix), "number", blockNum,
 				"blk/second", speed,
 				"alloc", common.StorageSize(m.Alloc),
 				"sys", common.StorageSize(m.Sys),
