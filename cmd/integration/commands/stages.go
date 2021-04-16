@@ -531,7 +531,7 @@ func stageLogIndex(db ethdb.Database, ctx context.Context) error {
 func stageCallTraces(db ethdb.Database, ctx context.Context) error {
 	tmpdir := path.Join(datadir, etl.TmpDirName)
 
-	engine, chainConfig, _, _, _, cache, progress := newSync(ctx.Done(), db, db, nil)
+	engine, chainConfig, _, _, _, _, progress := newSync(ctx.Done(), db, db, nil)
 
 	if reset {
 		return db.(ethdb.HasRwKV).RwKV().Update(ctx, func(tx ethdb.RwTx) error { return resetCallTraces(tx) })
@@ -553,17 +553,13 @@ func stageCallTraces(db ethdb.Database, ctx context.Context) error {
 		u := &stagedsync.UnwindState{Stage: stages.CallTraces, UnwindPoint: s.BlockNumber - unwind}
 		return stagedsync.UnwindCallTraces(u, s, db, chainConfig, engine, ch,
 			stagedsync.CallTracesStageParams{
-				ToBlock:   block,
-				Cache:     cache,
-				BatchSize: batchSize,
+				ToBlock: block,
 			})
 	}
 
 	if err := stagedsync.SpawnCallTraces(s, db, chainConfig, engine, tmpdir, ch,
 		stagedsync.CallTracesStageParams{
-			ToBlock:   block,
-			Cache:     cache,
-			BatchSize: batchSize,
+			ToBlock: block,
 		}); err != nil {
 		return err
 	}

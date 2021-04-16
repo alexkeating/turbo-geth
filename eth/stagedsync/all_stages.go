@@ -202,17 +202,11 @@ func createStageBuilders(blocks []*types.Block, blockNum uint64, checkRoot bool)
 					Description: "Generate call traces index",
 					ExecFunc: func(s *StageState, u Unwinder) error {
 						return SpawnCallTraces(s, world.TX, world.ChainConfig, world.Engine, world.TmpDir, world.QuitCh,
-							CallTracesStageParams{
-								Cache:     world.cache,
-								BatchSize: world.BatchSize,
-							})
+							CallTracesStageParams{})
 					},
 					UnwindFunc: func(u *UnwindState, s *StageState) error {
 						return UnwindCallTraces(u, s, world.TX, world.ChainConfig, world.Engine, world.QuitCh,
-							CallTracesStageParams{
-								Cache:     world.cache,
-								BatchSize: world.BatchSize,
-							})
+							CallTracesStageParams{})
 					},
 				}
 			},
