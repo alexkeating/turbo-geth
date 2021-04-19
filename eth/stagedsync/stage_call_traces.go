@@ -132,7 +132,7 @@ func promoteCallTraces(logPrefix string, tx ethdb.Database, startBlock, endBlock
 			return err
 		}
 		if block == nil {
-			break
+			return fmt.Errorf("no block: %d", blockNum)
 		}
 
 		stateReader := state.NewPlainDBState(tx, blockNum-1)
@@ -255,7 +255,7 @@ func unwindCallTraces(logPrefix string, db ethdb.Database, from, to uint64, chai
 
 	tracer := NewCallTracer()
 	vmConfig := &vm.Config{Debug: true, NoReceipts: true, Tracer: tracer}
-	for blockNum := to + 1; blockNum <= from; blockNum++ {
+	for blockNum := from; blockNum > to; blockNum-- {
 		if err := common.Stopped(quitCh); err != nil {
 			return err
 		}
@@ -269,7 +269,7 @@ func unwindCallTraces(logPrefix string, db ethdb.Database, from, to uint64, chai
 			return err
 		}
 		if block == nil {
-			break
+			return fmt.Errorf("no block %d", blockNum)
 		}
 
 		stateReader := state.NewPlainDBState(db, blockNum-1)
