@@ -32,6 +32,11 @@ func spawnTxPool(s *StageState, db ethdb.Database, pool *core.TxPool, poolStart 
 	if err != nil {
 		return err
 	}
+	if to == s.BlockNumber {
+		s.Done()
+		return nil
+	}
+
 	logPrefix := s.state.LogPrefix()
 	if to < s.BlockNumber {
 		return fmt.Errorf("%s: to (%d) < from (%d)", logPrefix, to, s.BlockNumber)
