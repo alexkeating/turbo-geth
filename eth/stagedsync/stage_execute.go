@@ -388,6 +388,8 @@ func UnwindExecutionStage(u *UnwindState, s *StageState, stateDB ethdb.Database,
 }
 
 func unwindExecutionStage(u *UnwindState, s *StageState, tx ethdb.RwTx, quit <-chan struct{}, params ExecuteBlockStageParams) error {
+	logEvery := time.NewTicker(30 * time.Second)
+	defer logEvery.Stop()
 	logPrefix := s.state.LogPrefix()
 	stateBucket := dbutils.PlainStateBucket
 	storageKeyLength := common.AddressLength + common.IncarnationLength + common.HashLength
@@ -419,6 +421,12 @@ func unwindExecutionStage(u *UnwindState, s *StageState, tx ethdb.RwTx, quit <-c
 				params.Cache.SetAccountDelete([]byte(key))
 			}
 		}
+
+		select {
+		default:
+		case <-logEvery.C:
+			log.Info(fmt.Sprintf("[%s] updating accounts", logPrefix))
+		}
 	}
 
 	for key, value := range storageMap {
@@ -437,6 +445,12 @@ func unwindExecutionStage(u *UnwindState, s *StageState, tx ethdb.RwTx, quit <-c
 			if params.Cache != nil {
 				params.Cache.SetStorageDelete(k[:20], binary.BigEndian.Uint64(k[20:28]), k[28:])
 			}
+		}
+
+		select {
+		default:
+		case <-logEvery.C:
+			log.Info(fmt.Sprintf("[%s] updating accounts", logPrefix))
 		}
 	}
 
