@@ -18,15 +18,17 @@ package fetcher
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/holiman/uint256"
+	proto_txpool "github.com/ledgerwatch/turbo-geth/gointerfaces/txpool"
+	"github.com/ledgerwatch/turbo-geth/turbo/txpool"
 
 	"github.com/ledgerwatch/turbo-geth/common"
 	"github.com/ledgerwatch/turbo-geth/common/mclock"
-	"github.com/ledgerwatch/turbo-geth/core"
 	"github.com/ledgerwatch/turbo-geth/core/types"
 )
 
@@ -78,9 +80,9 @@ type txFetcherTest struct {
 func TestTransactionFetcherWaiting(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				nil,
+				FindUnknownTxsF(pool), ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -168,9 +170,9 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 func TestTransactionFetcherSkipWaiting(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				nil,
+				FindUnknownTxsF(pool), ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -231,9 +233,9 @@ func TestTransactionFetcherSkipWaiting(t *testing.T) {
 func TestTransactionFetcherSingletonRequesting(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				nil,
+				FindUnknownTxsF(pool), ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -308,9 +310,9 @@ func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				nil,
+				FindUnknownTxsF(pool), ImportTxsF(pool),
 				func(origin string, hashes []common.Hash) error {
 					<-proceed
 					return errors.New("peer disconnected")
@@ -378,11 +380,13 @@ func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 func TestTransactionFetcherCleanup(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
+				//func(txs []*types.Transaction) []error {
+				//	return make([]error, len(txs))
+				//},
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -417,11 +421,10 @@ func TestTransactionFetcherCleanup(t *testing.T) {
 func TestTransactionFetcherCleanupEmpty(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -455,11 +458,10 @@ func TestTransactionFetcherCleanupEmpty(t *testing.T) {
 func TestTransactionFetcherMissingRescheduling(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -501,11 +503,10 @@ func TestTransactionFetcherMissingRescheduling(t *testing.T) {
 func TestTransactionFetcherMissingCleanup(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -539,11 +540,10 @@ func TestTransactionFetcherMissingCleanup(t *testing.T) {
 func TestTransactionFetcherBroadcasts(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -589,9 +589,10 @@ func TestTransactionFetcherBroadcasts(t *testing.T) {
 func TestTransactionFetcherWaitTimerResets(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				nil,
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -644,11 +645,10 @@ func TestTransactionFetcherWaitTimerResets(t *testing.T) {
 func TestTransactionFetcherTimeoutRescheduling(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -711,9 +711,10 @@ func TestTransactionFetcherTimeoutRescheduling(t *testing.T) {
 func TestTransactionFetcherTimeoutTimerResets(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				nil,
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -770,9 +771,10 @@ func TestTransactionFetcherRateLimiting(t *testing.T) {
 
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				nil,
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -808,9 +810,10 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 	}
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				nil,
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -865,18 +868,22 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 func TestTransactionFetcherUnderpricedDedup(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					errs := make([]error, len(txs))
+				FindUnknownTxsF(pool),
+				//ImportTxsF(pool),
+				func(txs [][]byte) ([]proto_txpool.ImportResult, error) {
+					errs := make([]proto_txpool.ImportResult, len(txs))
 					for i := 0; i < len(errs); i++ {
 						if i%2 == 0 {
-							errs[i] = core.ErrUnderpriced
+							errs[i] = proto_txpool.ImportResult_FEE_TOO_LOW
+							//core.ErrUnderpriced
 						} else {
-							errs[i] = core.ErrReplaceUnderpriced
+							errs[i] = proto_txpool.ImportResult_FEE_TOO_LOW
+							//errs[i] = core.ErrReplaceUnderpriced
 						}
 					}
-					return errs
+					return errs, nil
 				},
 				func(string, []common.Hash) error { return nil },
 			)
@@ -938,14 +945,15 @@ func TestTransactionFetcherUnderpricedDoSProtection(t *testing.T) {
 	}
 	testTransactionFetcher(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					errs := make([]error, len(txs))
+				FindUnknownTxsF(pool),
+				func(txs [][]byte) ([]proto_txpool.ImportResult, error) {
+					errs := make([]proto_txpool.ImportResult, len(txs))
 					for i := 0; i < len(errs); i++ {
-						errs[i] = core.ErrUnderpriced
+						errs[i] = proto_txpool.ImportResult_FEE_TOO_LOW
 					}
-					return errs
+					return errs, nil
 				},
 				func(string, []common.Hash) error { return nil },
 			)
@@ -964,11 +972,10 @@ func TestTransactionFetcherUnderpricedDoSProtection(t *testing.T) {
 func TestTransactionFetcherOutOfBoundDeliveries(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -1017,11 +1024,10 @@ func TestTransactionFetcherOutOfBoundDeliveries(t *testing.T) {
 func TestTransactionFetcherDrop(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -1083,11 +1089,10 @@ func TestTransactionFetcherDrop(t *testing.T) {
 func TestTransactionFetcherDropRescheduling(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -1128,11 +1133,10 @@ func TestTransactionFetcherDropRescheduling(t *testing.T) {
 func TestTransactionFetcherFuzzCrash01(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -1155,11 +1159,10 @@ func TestTransactionFetcherFuzzCrash01(t *testing.T) {
 func TestTransactionFetcherFuzzCrash02(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -1184,11 +1187,10 @@ func TestTransactionFetcherFuzzCrash02(t *testing.T) {
 func TestTransactionFetcherFuzzCrash03(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error { return nil },
 			)
 		},
@@ -1217,11 +1219,10 @@ func TestTransactionFetcherFuzzCrash04(t *testing.T) {
 
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
+			pool, _ := txpool.NewTestTxPool()
 			return NewTxFetcher(
-				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
+				FindUnknownTxsF(pool),
+				ImportTxsF(pool),
 				func(string, []common.Hash) error {
 					<-proceed
 					return errors.New("peer disconnected")
@@ -1314,6 +1315,8 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 						t.Errorf("step %d, peer %s: hash %x missing from waitslots", i, peer, hash)
 					}
 				}
+				fmt.Printf("a: %x\n", waiting)
+				fmt.Printf("b: %x\n", hashes)
 				for hash := range waiting {
 					if !containsHash(hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x extra in waitslots", i, peer, hash)
