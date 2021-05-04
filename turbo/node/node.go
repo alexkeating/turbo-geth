@@ -83,6 +83,12 @@ func New(
 	ethereum := utils.RegisterEthService(node, ethConfig)
 
 	metrics.AddCallback(ethereum.ChainKV().CollectMetrics)
+	// Let's give it a shot here
+	if ctx.GlobalBool(utils.Eth1SyncServiceEnable.Name) {
+		if err := ethereum.SyncService().Start(); err != nil {
+			utils.Fatalf("Failed to start syncservice: %v", err)
+		}
+	}
 
 	return &TurboGethNode{stack: node, backend: ethereum}
 }

@@ -578,6 +578,87 @@ var (
 		Usage: "a path to clique db folder",
 		Value: "",
 	}
+	Eth1SyncServiceEnable = cli.BoolFlag{
+		Name:   "eth1.syncservice",
+		Usage:  "Enable the sync service",
+		EnvVar: "ETH1_SYNC_SERVICE_ENABLE",
+	}
+	Eth1CanonicalTransactionChainDeployHeightFlag = cli.StringFlag{
+		Name:   "eth1.ctcdeploymentheight",
+		Usage:  "Deployment of the canonical transaction chain",
+		EnvVar: "ETH1_CTC_DEPLOYMENT_HEIGHT",
+	}
+	Eth1L1CrossDomainMessengerAddressFlag = cli.StringFlag{
+		Name:   "eth1.l1crossdomainmessengeraddress",
+		Usage:  "Deployment address of the L1 cross domain messenger",
+		Value:  "0x0000000000000000000000000000000000000000",
+		EnvVar: "ETH1_L1_CROSS_DOMAIN_MESSENGER_ADDRESS",
+	}
+	Eth1ETHGatewayAddressFlag = cli.StringFlag{
+		Name:   "eth1.l1ethgatewayaddress",
+		Usage:  "Deployment address of the Ethereum gateway",
+		Value:  "0x0000000000000000000000000000000000000000",
+		EnvVar: "ETH1_L1_ETH_GATEWAY_ADDRESS",
+	}
+	Eth1ChainIdFlag = cli.Uint64Flag{
+		Name:   "eth1.chainid",
+		Usage:  "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby)",
+		EnvVar: "ETH1_CHAINID",
+	}
+	RollupClientHttpFlag = cli.StringFlag{
+		Name:   "rollup.clienthttp",
+		Usage:  "HTTP endpoint for the rollup client",
+		Value:  "http://localhost:7878",
+		EnvVar: "ROLLUP_CLIENT_HTTP",
+	}
+	RollupPollIntervalFlag = cli.DurationFlag{
+		Name:   "rollup.pollinterval",
+		Usage:  "Interval for polling with the rollup http client",
+		Value:  time.Second * 10,
+		EnvVar: "ROLLUP_POLL_INTERVAL_FLAG",
+	}
+	RollupTimstampRefreshFlag = cli.DurationFlag{
+		Name:   "rollup.timestamprefresh",
+		Usage:  "Interval for refreshing the timestamp",
+		Value:  time.Minute * 15,
+		EnvVar: "ROLLUP_TIMESTAMP_REFRESH",
+	}
+	// Flag to enable verifier mode
+	RollupEnableVerifierFlag = cli.BoolFlag{
+		Name:   "rollup.verifier",
+		Usage:  "Enable the verifier",
+		EnvVar: "ROLLUP_VERIFIER_ENABLE",
+	}
+	RollupAddressManagerOwnerAddressFlag = cli.StringFlag{
+		Name:   "rollup.addressmanagerowneraddress",
+		Usage:  "Owner address of the address manager",
+		Value:  "0x0000000000000000000000000000000000000000",
+		EnvVar: "ROLLUP_ADDRESS_MANAGER_OWNER_ADDRESS",
+	}
+	RollupStateDumpPathFlag = cli.StringFlag{
+		Name:   "rollup.statedumppath",
+		Usage:  "Path to the state dump",
+		Value:  eth.DefaultConfig.Rollup.StateDumpPath,
+		EnvVar: "ROLLUP_STATE_DUMP_PATH",
+	}
+	RollupDiffDbFlag = cli.Uint64Flag{
+		Name:   "rollup.diffdbcache",
+		Usage:  "Number of diffdb batch updates",
+		Value:  eth.DefaultConfig.DiffDbCache,
+		EnvVar: "ROLLUP_DIFFDB_CACHE",
+	}
+	RollupMaxCalldataSizeFlag = cli.IntFlag{
+		Name:   "rollup.maxcalldatasize",
+		Usage:  "Maximum allowed calldata size for Queue Origin Sequencer Txs",
+		Value:  eth.DefaultConfig.Rollup.MaxCallDataSize,
+		EnvVar: "ROLLUP_MAX_CALLDATA_SIZE",
+	}
+	RollupL1GasPriceFlag = BigFlag{
+		Name:   "rollup.l1gasprice",
+		Usage:  "The L1 gas price to use for the sequencer fees",
+		Value:  eth.DefaultConfig.Rollup.L1GasPrice,
+		EnvVar: "ROLLUP_L1_GASPRICE",
+	}
 )
 
 var MetricFlags = []cli.Flag{MetricsEnabledFlag, MetricsEnabledExpensiveFlag, MetricsHTTPFlag, MetricsPortFlag}

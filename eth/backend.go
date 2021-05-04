@@ -58,6 +58,7 @@ import (
 	"github.com/ledgerwatch/turbo-geth/p2p"
 	"github.com/ledgerwatch/turbo-geth/p2p/enode"
 	"github.com/ledgerwatch/turbo-geth/params"
+	"github.com/ledgerwatch/turbo-geth/rollup"
 	"github.com/ledgerwatch/turbo-geth/rpc"
 	"github.com/ledgerwatch/turbo-geth/turbo/snapshotsync"
 	"github.com/ledgerwatch/turbo-geth/turbo/snapshotsync/bittorrent"
@@ -80,6 +81,7 @@ type Ethereum struct {
 	txPool            *core.TxPool
 	handler           *handler
 	ethDialCandidates enode.Iterator
+	syncService       *rollup.SyncService
 
 	// DB interfaces
 	chainKV    ethdb.RwKV // Same as chainDb, but different interface
@@ -106,7 +108,7 @@ type Ethereum struct {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
-	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
+	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) < 0 {
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
 		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
 	}
@@ -323,7 +325,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		}
 	}
 
+	// TODO: Where does the DiffDb go??
 	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, chainDb, txCacher)
+	eth.syncService, err = rollup.NewSyncService(context.Background(), config.Rollup, eth.TxPool, eth.chainKV, eth.chainConfig)
+	if err != nil {
+		return nil, fmt.Errorf("Cannot initialize syncservice: %w", err)
+	}
 
 	stagedSync := config.StagedSync
 

@@ -7,7 +7,9 @@ import (
 )
 
 // DefaultFlags contains all flags that are used and supported by turbo-geth binary.
-var DefaultFlags = []cli.Flag{
+var DefaultFlags = append(dFlags, optimismFlags...)
+
+var dFlags = []cli.Flag{
 	utils.DataDirFlag,
 	utils.EthashDatasetDirFlag,
 	utils.TxPoolLocalsFlag,
@@ -67,4 +69,22 @@ var DefaultFlags = []cli.Flag{
 	utils.MinerEtherbaseFlag,
 	utils.MinerExtraDataFlag,
 	utils.MinerNoVerfiyFlag,
+}
+
+var optimismFlags = []cli.Flag{
+	utils.Eth1SyncServiceEnable,
+	utils.Eth1CanonicalTransactionChainDeployHeightFlag,
+	utils.Eth1L1CrossDomainMessengerAddressFlag,
+	utils.Eth1ETHGatewayAddressFlag,
+	utils.Eth1ChainIdFlag,
+	utils.RollupClientHttpFlag,
+	// Enable verifier mode
+	utils.RollupEnableVerifierFlag,
+	utils.RollupAddressManagerOwnerAddressFlag,
+	utils.RollupTimstampRefreshFlag,
+	utils.RollupPollIntervalFlag,
+	utils.RollupStateDumpPathFlag,
+	utils.RollupDiffDbFlag,
+	utils.RollupMaxCalldataSizeFlag,
+	utils.RollupL1GasPriceFlag,
 }
