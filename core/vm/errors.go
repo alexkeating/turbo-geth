@@ -39,6 +39,10 @@ var (
 	ErrGasUintOverflow          = errors.New("gas uint64 overflow")
 	ErrInvalidRetsub            = errors.New("invalid retsub")
 	ErrReturnStackExceeded      = errors.New("return stack limit reached")
+	// OVM Errors
+	ErrOvmCreationFailed  = errors.New("creation called by non-Execution Manager contract")
+	ErrOvmExecutionFailed = errors.New("ovm execution failed")
+	errExecutionReverted  = errors.New("evm: execution reverted")
 )
 
 // ErrStackUnderflow wraps an evm error when the items on the stack less

@@ -17,6 +17,9 @@
 package vm
 
 import (
+	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"math/big"
 	"sync/atomic"
@@ -25,10 +28,22 @@ import (
 	"github.com/holiman/uint256"
 
 	"github.com/ledgerwatch/turbo-geth/common"
+	"github.com/ledgerwatch/turbo-geth/common/hexutil"
 	"github.com/ledgerwatch/turbo-geth/common/u256"
 	"github.com/ledgerwatch/turbo-geth/crypto"
+	"github.com/ledgerwatch/turbo-geth/log"
 	"github.com/ledgerwatch/turbo-geth/params"
+	"github.com/ledgerwatch/turbo-geth/rollup/dump"
 )
+
+// Will be removed when we update EM to return data in `run`.
+var deadPrefix, fortyTwoPrefix, zeroPrefix []byte
+
+func init() {
+	deadPrefix = hexutil.MustDecode("0xdeaddeaddeaddeaddeaddeaddeaddeaddead")
+	zeroPrefix = hexutil.MustDecode("0x000000000000000000000000000000000000")
+	fortyTwoPrefix = hexutil.MustDecode("0x420000000000000000000000000000000000")
+}
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
 // deployed contract addresses (relevant after the account abstraction).
@@ -110,6 +125,13 @@ type BlockContext struct {
 	BlockNumber *big.Int       // Provides information for NUMBER
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
+
+	// OVM_ADDITION
+	EthCallSender         *common.Address
+	OriginalTargetAddress *common.Address
+	OriginalTargetResult  []byte
+	OriginalTargetReached bool
+	OvmExecutionManager   dump.OvmDumpAccount
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -157,11 +179,17 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
+
+	Id string
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
 func NewEVM(blockCtx BlockContext, txCtx TxContext, state IntraBlockState, chainConfig *params.ChainConfig, vmConfig Config) *EVM {
+
+	id := make([]byte, 4)
+	rand.Read(id)
+
 	evm := &EVM{
 		Context:         blockCtx,
 		TxContext:       txCtx,
@@ -170,6 +198,8 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, state IntraBlockState, chain
 		chainConfig:     chainConfig,
 		chainRules:      chainConfig.Rules(blockCtx.BlockNumber),
 		interpreters:    make([]Interpreter, 0, 1),
+
+		Id: hex.EncodeToString(id),
 	}
 
 	evm.interpreters = append(evm.interpreters, NewEVMInterpreter(evm, vmConfig))
@@ -206,6 +236,34 @@ func (evm *EVM) Interpreter() Interpreter {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int, bailout bool) (ret []byte, leftOverGas uint64, err error) {
+	var isTarget = false
+	if UsingOVM {
+		// OVM_ENABLED
+		if evm.depth == 0 {
+			// We're inside a new transaction, so make sure to wipe these variables beforehand.
+			evm.Context.OriginalTargetAddress = nil
+			evm.Context.OriginalTargetResult = []byte("00")
+			evm.Context.OriginalTargetReached = false
+		}
+
+		if caller.Address() == evm.Context.OvmExecutionManager.Address &&
+			!bytes.HasPrefix(addr.Bytes(), deadPrefix) &&
+			!bytes.HasPrefix(addr.Bytes(), zeroPrefix) &&
+			!bytes.HasPrefix(addr.Bytes(), fortyTwoPrefix) &&
+			evm.Context.OriginalTargetAddress == nil {
+			// Whew. Okay, so: we consider ourselves to be at a "target" as long as we were called
+			// by the execution manager, and we're not a precompile or "dead" address.
+			evm.Context.OriginalTargetAddress = &addr
+			evm.Context.OriginalTargetReached = true
+			isTarget = true
+		}
+		// Handle eth_call
+		if evm.Context.EthCallSender != nil && (caller.Address() == common.Address{}) {
+			evm.Context.OriginalTargetReached = true
+			isTarget = true
+		}
+	}
+
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -213,10 +271,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
 	}
-	// Fail if we're trying to transfer more than the available balance
-	if value.Sign() != 0 && !evm.Context.CanTransfer(evm.IntraBlockState, caller.Address(), value) {
-		if !bailout {
-			return nil, gas, ErrInsufficientBalance
+	if !UsingOVM {
+		// Fail if we're trying to transfer more than the available balance
+		if value.Sign() != 0 && !evm.Context.CanTransfer(evm.IntraBlockState, caller.Address(), value) {
+			if !bailout {
+				return nil, gas, ErrInsufficientBalance
+			}
 		}
 	}
 	p, isPrecompile := evm.precompile(addr)
@@ -236,7 +296,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 		evm.IntraBlockState.CreateAccount(addr, false)
 	}
-	evm.Context.Transfer(evm.IntraBlockState, caller.Address(), to.Address(), value, bailout)
+	if !UsingOVM {
+		evm.Context.Transfer(evm.IntraBlockState, caller.Address(), to.Address(), value, bailout)
+	}
 
 	// Capture the tracer start/end events in debug mode
 	if evm.vmConfig.Debug {
@@ -276,6 +338,67 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		//} else {
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
+
+	if UsingOVM {
+		// OVM_ENABLED
+
+		if isTarget {
+			// If this was our target contract, store the result so that it can be later re-inserted
+			// into the user-facing return data (as seen below).
+			evm.Context.OriginalTargetResult = ret
+		}
+
+		if evm.depth == 0 {
+			// We're back at the root-level message call, so we'll need to modify the return data
+			// sent to us by the OVM_ExecutionManager to instead be the intended return data.
+
+			if !evm.Context.OriginalTargetReached {
+				// If we didn't get to the target contract, then our execution somehow failed
+				// (perhaps due to insufficient gas). Just return an error that represents this.
+				ret = common.FromHex("0x")
+				err = ErrOvmExecutionFailed
+			} else if len(evm.Context.OriginalTargetResult) >= 96 {
+				// We expect that EOA contracts return at least 96 bytes of data, where the first
+				// 32 bytes are the boolean success value and the next 64 bytes are unnecessary
+				// ABI encoding data. The actual return data starts at the 96th byte and can be
+				// empty.
+				success := evm.Context.OriginalTargetResult[:32]
+				ret = evm.Context.OriginalTargetResult[96:]
+
+				if !bytes.Equal(success, AbiBytesTrue) && !bytes.Equal(success, AbiBytesFalse) {
+					// If the first 32 bytes not either are the ABI encoding of "true" or "false",
+					// then the user hasn't correctly ABI encoded the result. We return the null
+					// hex string as a default here (an annoying default that would convince most
+					// people to just use the standard form).
+					ret = common.FromHex("0x")
+				} else if bytes.Equal(success, AbiBytesFalse) {
+					// If the first 32 bytes are the ABI encoding of "false", then we need to add an
+					// artificial error that represents the revert.
+					err = errExecutionReverted
+
+					// We also currently need to add an extra four empty bytes to the return data
+					// to appease ethers.js. Our return correctly inserts the four specific bytes
+					// that represent a "string error" to clients, but somehow the returndata size
+					// is a multiple of 32 (when we expect size % 32 == 4). ethers.js checks that
+					// [size % 32 == 4] before trying to decode a string error result. Adding these
+					// four empty bytes tricks ethers into correctly decoding the error string.
+					// ovmTODO: Figure out how to actually deal with this.
+					// ovmTODO: This may actually be completely broken if the first four bytes of
+					// the return data are **not** the specific "string error" bytes.
+					ret = append(ret, make([]byte, 4)...)
+				}
+			} else {
+				// User hasn't conformed the standard format, just return "null" for the success
+				// (with no return data) to convince them to use the standard.
+				ret = common.FromHex("0x")
+			}
+
+			if evm.Context.EthCallSender == nil {
+				log.Debug("Reached the end of an OVM execution", "ID", evm.Id, "Return Data", hexutil.Encode(ret), "Error", err)
+			}
+		}
+	}
+
 	return ret, gas, err
 }
 
@@ -535,7 +658,23 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 // Create creates a new contract using code as deployment code.
 // DESCRIBED: docs/programmers_guide/guide.md#nonce
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
-	contractAddr = crypto.CreateAddress(caller.Address(), evm.IntraBlockState.GetNonce(caller.Address()))
+	if !UsingOVM {
+		// OVM_DISABLED
+		contractAddr = crypto.CreateAddress(caller.Address(), evm.IntraBlockState.GetNonce(caller.Address()))
+	} else {
+		// OVM_ENABLED
+		if caller.Address() != evm.Context.OvmExecutionManager.Address {
+			log.Error("Creation called by non-Execution Manager contract! This should never happen.", "Offending address", caller.Address().Hex())
+			return nil, caller.Address(), 0, ErrOvmCreationFailed
+		}
+
+		contractAddr = evm.OvmADDRESS()
+
+		if evm.Context.EthCallSender == nil {
+			log.Debug("[EM] Creating contract.", "ID", evm.Id, "New contract address", contractAddr.Hex(), "Caller Addr", caller.Address().Hex(), "Caller nonce", evm.IntraBlockState.GetNonce(caller.Address()))
+		}
+	}
+
 	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATET)
 }
 
@@ -552,3 +691,12 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
+
+// OvmADDRESS will be set by the execution manager to the target address whenever it's
+// about to create a new contract. This value is currently stored at the [15] storage slot.
+// Can pull this specific storage slot to get the address that the execution manager is
+// trying to create to, and create to it.
+func (evm *EVM) OvmADDRESS() common.Address {
+	slot := common.Hash{31: 0x0f}
+	return common.BytesToAddress(evm.StateDB.GetState(evm.Context.OvmExecutionManager.Address, slot).Bytes())
+}
